@@ -246,7 +246,7 @@ struct DeckCard: View {
     }
 }
 
-/// The ⓘ page on the home screen: version, and where to find and support PenCast.
+/// The ⓘ page on the home screen: version, and where to find PenCast.
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
     private var version: String {
@@ -265,12 +265,6 @@ struct AboutView: View {
                             .multilineTextAlignment(.center).padding(.top, 4)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 8)
-                }
-                // ponytail: App Store review rejects donation links in apps (guideline 3.1.1); drop this row there.
-                Section("Support") {
-                    Link(destination: URL(string: "https://ko-fi.com/gregoryjanes")!) {
-                        Label("Support PenCast on Ko-fi", systemImage: "cup.and.saucer")
-                    }
                 }
                 Section("GitHub") {
                     Link(destination: URL(string: "https://github.com/e1ind/pencast")!) {

@@ -206,12 +206,12 @@ final class VideoControlsTests: XCTestCase {
         }
     }
 
-    /// The ⓘ button on the home screen opens the About page with the Ko-fi and GitHub links.
+    /// The ⓘ button on the home screen opens the About page with the GitHub links.
     func testAboutPageLinks() {
         let app = XCUIApplication()
         app.launch()
         app.buttons["About PenCast"].tap()
-        for link in ["Support PenCast on Ko-fi", "PenCast on GitHub", "gregoryjanes"] {
+        for link in ["PenCast on GitHub", "gregoryjanes"] {
             XCTAssertTrue(app.buttons[link].waitForExistence(timeout: 5) || app.links[link].exists, "\(link) link shown")
         }
         let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
