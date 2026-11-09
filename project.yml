@@ -1,0 +1,83 @@
+# Generate the Xcode project:  brew install xcodegen && xcodegen
+name: PenCast
+options:
+  bundleIdPrefix: com.gregoryjanes
+settings:
+  base:
+    DEVELOPMENT_TEAM: 4QR9R6S7XB   # Personal Team (free Apple ID); targets inherit it
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"   # explicit: XcodeGen otherwise leaves it at the SDK version
+packages:
+  PenCastCore:
+    path: Core
+schemes:
+  PenCast:
+    build:
+      targets:
+        PenCast: all
+    test:
+      targets: [PenCastUITests]
+targets:
+  PenCastUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: PenCast
+    settings:
+      base:
+        TEST_TARGET_NAME: PenCast
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.gregoryjanes.pencast.uitests
+  PenCast:
+    type: application
+    platform: iOS
+    supportedDestinations: [iOS, macCatalyst]
+    sources:
+      - PenCast
+      # Test decks bundled so the app can be exercised without moving files to the iPad.
+      - path: Corpus/media_test.pdf
+        buildPhase: resources
+      - path: Corpus/stress_100.pdf
+        buildPhase: resources
+      - path: Demo/PenCast_Demo.pdf   # showcase deck for recording demos (videos embedded)
+        buildPhase: resources
+      - path: Corpus/clip720p30.mp4   # linked by the \movie slide, resolved next to the bundled PDF
+        buildPhase: resources
+    dependencies:
+      - package: PenCastCore
+        product: PenCastCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gregoryjanes.pencast
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "2,6"   # 6 = Mac idiom: native-resolution UI and ink on Mac (no 77% scaling)
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: PenCast/Info.plist
+      properties:
+        CFBundleDisplayName: PenCast
+        CFBundleShortVersionString: "0.1.0"   # 0.x = beta; App Store builds start at 1.0
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true   # projector window on Mac / Stage Manager
+          # Without this declaration iPadOS just mirrors the iPad onto a projector / AirPlay display.
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleExternalDisplayNonInteractive:
+              - UISceneConfigurationName: Projector
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).ProjectorSceneDelegate
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIRequiresFullScreen: true
+        # Open PDFs from Files / AirDrop / share sheet in place.
+        LSSupportsOpeningDocumentsInPlace: true
+        UIFileSharingEnabled: true   # Finder can drop decks + linked videos into the app's Documents
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: PDF
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.adobe.pdf]

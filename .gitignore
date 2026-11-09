@@ -1,0 +1,6 @@
+build/
+.build/
+dist/
+*.xcresult
+.DS_Store
+/pencast_demo.MP4

@@ -1,0 +1,15 @@
+% 100 vector slides for memory / slide-change timing (spec 7.4).
+\documentclass[aspectratio=169]{beamer}
+\usepackage{tikz}
+\usetheme{Madrid}
+\begin{document}
+\foreach \n in {1,...,100}{%
+  \begin{frame}{Stress slide \n/100}
+    \centering
+    \begin{tikzpicture}
+      \foreach \k in {1,...,60}{\draw[color=blue!\k!red] (0,0) -- ({\k*6+\n}:3);}
+      \node[draw,fill=white] at (0,0) {\Huge\n};
+    \end{tikzpicture}
+  \end{frame}
+}
+\end{document}
