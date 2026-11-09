@@ -103,6 +103,7 @@ struct HomeView: View {
     let library = DeckLibrary.shared
     @State private var importing = false
     @State private var search = ""
+    @State private var showingAbout = false
 
     private var shown: [Deck] {
         search.isEmpty ? library.sorted : library.sorted.filter { $0.title.localizedCaseInsensitiveContains(search) }
@@ -143,8 +144,14 @@ struct HomeView: View {
             .navigationTitle("Presentations")
             .searchable(text: $search, prompt: "Search presentations")
             .toolbar {
-                Button { importing = true } label: { Label("Add Presentations", systemImage: "plus") }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showingAbout = true } label: { Label("About PenCast", systemImage: "info.circle") }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { importing = true } label: { Label("Add Presentations", systemImage: "plus") }
+                }
             }
+            .sheet(isPresented: $showingAbout) { AboutView() }
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { library.add(urls) }
@@ -236,5 +243,47 @@ struct DeckCard: View {
         }.value
         if let img { cache.setObject(img, forKey: key) }
         return img
+    }
+}
+
+/// The ⓘ page on the home screen: version, and where to find and support PenCast.
+struct AboutView: View {
+    @Environment(\.dismiss) private var dismiss
+    private var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    VStack(spacing: 8) {
+                        Image("AboutIcon").resizable().frame(width: 96, height: 96)
+                        Text("PenCast").font(.title.bold())
+                        Text("Version \(version) beta").foregroundStyle(.secondary)
+                        Text("Present Beamer PDFs with their videos, animations and your handwriting.")
+                            .multilineTextAlignment(.center).padding(.top, 4)
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 8)
+                }
+                // ponytail: App Store review rejects donation links in apps (guideline 3.1.1); drop this row there.
+                Section("Support") {
+                    Link(destination: URL(string: "https://ko-fi.com/gregoryjanes")!) {
+                        Label("Support PenCast on Ko-fi", systemImage: "cup.and.saucer")
+                    }
+                }
+                Section("GitHub") {
+                    Link(destination: URL(string: "https://github.com/e1ind")!) {
+                        Label("e1ind", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
+                    Link(destination: URL(string: "https://github.com/gregoryjanes")!) {
+                        Label("gregoryjanes", systemImage: "person.crop.circle")
+                    }
+                }
+            }
+            .navigationTitle("About")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { Button("Done") { dismiss() } }
+        }
     }
 }

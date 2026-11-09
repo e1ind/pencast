@@ -206,6 +206,20 @@ final class VideoControlsTests: XCTestCase {
         }
     }
 
+    /// The ⓘ button on the home screen opens the About page with the Ko-fi and GitHub links.
+    func testAboutPageLinks() {
+        let app = XCUIApplication()
+        app.launch()
+        app.buttons["About PenCast"].tap()
+        for link in ["Support PenCast on Ko-fi", "e1ind", "gregoryjanes"] {
+            XCTAssertTrue(app.buttons[link].waitForExistence(timeout: 5) || app.links[link].exists, "\(link) link shown")
+        }
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "about"; shot.lifetime = .keepAlways; add(shot)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["About PenCast"].waitForExistence(timeout: 5), "back on the home screen")
+    }
+
     /// Zoomed in: the eraser must hit the stroke under the finger.
     func testEraserHitsUnderFingerWhenZoomed() {
         let app = XCUIApplication()
