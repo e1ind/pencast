@@ -23,7 +23,7 @@
 
 PenCast opens the PDF you compiled from LaTeX and presents it exactly as it is. Videos and animations play
 right on the slide, you write over everything with Apple Pencil, and a projector shows the clean slide while
-your iPad keeps the controls. No conversion, no PowerPoint step, no special macros.
+your iPad keeps the controls.
 
 ## Features
 
