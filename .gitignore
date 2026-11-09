@@ -3,6 +3,5 @@ build/
 dist/
 *.xcresult
 .DS_Store
-/pencast_demo.MP4
-/PenCast LaTeX Beamer Presentation App.png
-/Screenshot*.png
+xcuserdata/
+.swiftpm/
