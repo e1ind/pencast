@@ -16,7 +16,7 @@
 <p align="center">
   <a href="docs/media/pencast_demo.mp4"><img src="docs/media/pencast_preview.gif" width="720" alt="PenCast demo: writing over a playing video, the laser pointer, zoomed writing and the fountain pen"></a>
   <br>
-  <a href="docs/media/pencast_demo.mp4"><b>▶ Watch the full demo</b></a> (4 min)
+  <a href="docs/media/pencast_demo.mp4"><b>▶ Watch the full demo</b></a> (3 min)
 </p>
 
 ---
