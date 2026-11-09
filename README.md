@@ -1,12 +1,5 @@
 <p align="center">
-  <img src="docs/media/icon.png" width="128" height="128" alt="PenCast app icon">
-</p>
-
-<h1 align="center">PenCast</h1>
-
-<p align="center">
-  <b>Present Beamer PDFs with their videos, animations and your handwriting.</b><br>
-  For iPad and Mac.
+  <img src="docs/media/banner.png" alt="PenCast: present Beamer PDFs with their videos, animations and your handwriting. For iPad and Mac.">
 </p>
 
 <p align="center">
