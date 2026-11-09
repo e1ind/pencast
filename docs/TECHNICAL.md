@@ -1,7 +1,5 @@
 # Technical notes
 
-The original product spec is in [pencast_app_specs.md](pencast_app_specs.md).
-
 ## Repository layout
 
 ```
@@ -10,7 +8,7 @@ Core/        Swift package PenCastCore: PDF media scanner (CGPDF) and slide geom
   Sources/pencast-scan/   CLI: list a deck's media, extract embedded videos, self-check
 UITests/     XCUITest suite
 Corpus/      Test decks and videos (./build.sh rebuilds them)
-Demo/        Showcase deck for recording demos (PenCast_Demo.pdf; shot list in Demo/README.md)
+Demo/        Showcase deck PenCast_Demo.pdf (./build.sh renders its videos and compiles it)
 scripts/     package-mac.sh: the Mac disk image for a release
 docs/        This documentation and README media
 project.yml  XcodeGen spec (PenCast.xcodeproj is generated from it)
