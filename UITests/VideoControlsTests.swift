@@ -211,7 +211,7 @@ final class VideoControlsTests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
         app.buttons["About PenCast"].tap()
-        for link in ["Support PenCast on Ko-fi", "e1ind", "gregoryjanes"] {
+        for link in ["Support PenCast on Ko-fi", "PenCast on GitHub", "gregoryjanes"] {
             XCTAssertTrue(app.buttons[link].waitForExistence(timeout: 5) || app.links[link].exists, "\(link) link shown")
         }
         let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())

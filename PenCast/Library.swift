@@ -273,8 +273,8 @@ struct AboutView: View {
                     }
                 }
                 Section("GitHub") {
-                    Link(destination: URL(string: "https://github.com/e1ind")!) {
-                        Label("e1ind", systemImage: "chevron.left.forwardslash.chevron.right")
+                    Link(destination: URL(string: "https://github.com/e1ind/pencast")!) {
+                        Label("PenCast on GitHub", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
                     Link(destination: URL(string: "https://github.com/gregoryjanes")!) {
                         Label("gregoryjanes", systemImage: "person.crop.circle")
