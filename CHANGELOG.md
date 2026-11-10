@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.1 (beta 2)
+
+PenCast for Linux, and a reading view for checking a deck while you write it.
+
+- Decks open in a scrolling reading view for checking them while writing; **Present** switches to the presenter
+  at that page (and opens the projector window on the Mac).
+- Mac: the window can shrink to share the screen with a LaTeX editor; it grows to fit the presenter's toolbar
+  when presenting, and the toolbar scrolls instead of squeezing its icons.
+- **Linux (beta):** packages for Rocky / RHEL / AlmaLinux 9 and 10, Fedora, Ubuntu 24.04 and 26.04 and Debian 13,
+  and an AppImage for other distributions. Reading view with reload on recompile, presenter with the projector
+  on the second screen, laser, pressure-sensitive pen, highlighter, eraser (a tablet pen's eraser end and barrel
+  button too), palm rejection, undo, talk timer and speaker notes, with the iPad's toolbar. Not yet on Linux:
+  videos and animations, zoom, the lasso, the partial eraser and export.
+
 ## 0.1.0 (beta 1)
 
 The first public beta: PenCast for Mac as a download, and for iPad when built from source.
