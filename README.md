@@ -1,8 +1,4 @@
 <p align="center">
-  <img src="docs/media/banner.png" alt="PenCast: present Beamer PDFs with their videos, animations and your handwriting. For iPad and Mac.">
-</p>
-
-<p align="center">
   <a href="https://github.com/e1ind/pencast/releases/latest/download/PenCast-mac.dmg"><img src="https://img.shields.io/badge/Download_for_Mac-Beta-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac"></a>
   <a href="https://ko-fi.com/gregoryjanes"><img src="https://img.shields.io/badge/Support_on_Ko--fi-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white" alt="Support PenCast on Ko-fi"></a>
 </p>
