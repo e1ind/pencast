@@ -31,17 +31,21 @@ jobs:
         run: |
           dnf install -y dnf-plugins-core epel-release
           dnf config-manager --set-enabled crb
-          dnf install -y cmake gcc-c++ rpm-build qt6-qtbase-devel qt6-qtpdf-devel qt6-qtmultimedia-devel
+          dnf install -y cmake gcc-c++ rpm-build qt6-qtbase-devel qt6-qtpdf-devel qt6-qtmultimedia-devel \
+            gstreamer1-plugins-base gstreamer1-plugins-good
       - name: Install build tools and Qt (Fedora)
         if: matrix.family == 'fedora'
-        run: dnf install -y cmake gcc-c++ rpm-build qt6-qtbase-devel qt6-qtpdf-devel qt6-qtmultimedia-devel
+        run: |
+          dnf install -y cmake gcc-c++ rpm-build qt6-qtbase-devel qt6-qtpdf-devel qt6-qtmultimedia-devel \
+            gstreamer1-plugins-base gstreamer1-plugins-good
       - name: Install build tools and Qt (Debian, Ubuntu)
         if: matrix.family == 'debian'
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends cmake g++ dpkg-dev file qt6-base-dev qt6-pdf-dev qt6-multimedia-dev
+          apt-get install -y --no-install-recommends cmake g++ dpkg-dev file qt6-base-dev qt6-pdf-dev qt6-multimedia-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
       - uses: actions/checkout@v4
       - name: Build and test
         run: |

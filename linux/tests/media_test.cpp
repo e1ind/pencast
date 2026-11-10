@@ -20,6 +20,7 @@ static QByteArray readFile(const QString &path) {
 static bool reddish(QRgb c) { return qRed(c) > 180 && qGreen(c) < 90 && qBlue(c) < 90; }
 
 int main(int argc, char **argv) {
+    qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     const QString corpus = CORPUS;
 

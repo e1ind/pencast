@@ -33,6 +33,9 @@ set(CPACK_STRIP_FILES ON)
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Gregory Janes <https://github.com/e1ind/pencast>")
 set(CPACK_DEBIAN_PACKAGE_SECTION graphics)
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)   # depends on the distribution's Qt packages
+# Video: Qt's GStreamer backend crashes without the base and good plugins; libav decodes H.264.
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, gstreamer1.0-libav")
+set(CPACK_RPM_PACKAGE_REQUIRES "gstreamer1-plugins-base, gstreamer1-plugins-good")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_RPM_PACKAGE_LICENSE GPL-3.0-or-later)
 set(CPACK_RPM_PACKAGE_GROUP Applications/Productivity)

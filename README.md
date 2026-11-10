@@ -74,8 +74,8 @@ CodeReady Builder repository too).
 Embedded videos are almost always H.264, which Fedora, Rocky and RHEL leave out for patent reasons. Add it from
 RPM Fusion (Rocky / RHEL 10: `sudo dnf install https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-10.noarch.rpm`,
 Fedora: `…/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm`), then
-`sudo dnf install gstreamer1-plugin-libav && sudo dnf swap ffmpeg-free ffmpeg --allowerasing`. Ubuntu and Debian
-play it out of the box, and so does the AppImage, which brings its own decoder. Without it a video shows a
+`sudo dnf install gstreamer1-plugin-libav && sudo dnf swap ffmpeg-free ffmpeg --allowerasing`. On Ubuntu and Debian
+the package installs it (`gstreamer1.0-libav`), and the AppImage brings its own decoder. Without it a video shows a
 message in place of the picture; the rest of the slide still works. Then point your LaTeX editor's PDF viewer at `pencast %f`. You can also
 [build it from source](docs/BUILDING.md#linux).
 
