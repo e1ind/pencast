@@ -1,4 +1,7 @@
-<h1><img src="Demo/icon.png" width="60" height="60" align="absmiddle" alt="PenCast icon"> PenCast</h1>
+<h1>
+  <img src="Demo/icon.png" width="50" height="50" align="absmiddle" alt="PenCast icon">&nbsp;
+  PenCast
+</h1>
 
 <p align="center">
   <img src="docs/media/banner.png" width="720" alt="PenCast: present Beamer PDFs with their videos, animations and your handwriting. For iPad and Mac.">
