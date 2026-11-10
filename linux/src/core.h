@@ -5,6 +5,7 @@
 #include <QColor>
 #include <QJsonArray>
 #include <QPointF>
+#include <QPolygonF>
 #include <QRectF>
 #include <QStringList>
 #include <QVector>
@@ -45,4 +46,11 @@ QJsonArray toJson(const QVector<Stroke> &strokes);
 QVector<Stroke> fromJson(const QJsonArray &array);
 /// Whether an eraser of `radius` at `p` touches the stroke.
 bool hits(const Stroke &s, QPointF p, double radius);
+/// Partial eraser: `strokes` with everything within `radius` of the segment a→b cut away (strokes split
+/// where it crosses them); nullopt if nothing was hit.
+std::optional<QVector<Stroke>> cut(const QVector<Stroke> &strokes, QPointF a, QPointF b, double radius);
+/// Lasso: the strokes with at least half their points inside `lasso`.
+QVector<int> inside(const QVector<Stroke> &strokes, const QPolygonF &lasso);
+/// Bounding box of `strokes[indices]`, line widths included.
+QRectF bounds(const QVector<Stroke> &strokes, const QVector<int> &indices);
 }

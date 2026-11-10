@@ -1,6 +1,8 @@
 // PenCast for Linux: home screen, scrolling reading view, presenter and projector window.
 #include "deck.h"
+#include "media.h"
 #include "slideview.h"
+#include "tooloptions.h"
 
 #include <QtWidgets>
 #include <QPdfDocument>
@@ -8,8 +10,6 @@
 #include <QPdfView>
 #include <QScroller>
 
-static const QColor penSwatches[] = {Qt::black, QColor(0, 102, 255), QColor(230, 30, 30), QColor(0, 140, 64)};
-static const QColor highlighterSwatches[] = {QColor(255, 235, 59), QColor(140, 240, 120), QColor(255, 150, 200), QColor(120, 220, 255)};
 
 // Toolbar metrics and colours of the iPad app (SlideView.swift): 44 pt targets, 22 pt icons, system blue.
 static const QColor accent(10, 132, 255), destructive(255, 69, 58), orange(255, 159, 10), green(48, 209, 88);
@@ -32,7 +32,8 @@ static QIcon swatchIcon(const QColor &c, bool current) {
     return QIcon(pm);
 }
 
-enum class Glyph { Close, Play, Pause, Pointer, Laser, Pen, Highlighter, Eraser, Undo, Redo, Trash, Display, Back, Forward };
+enum class Glyph { Close, Play, Pause, Pointer, Laser, Pen, Highlighter, Eraser, Lasso, Undo, Redo, Trash, Display, Back, Forward,
+                   Share, WholeSlide, Grid };
 
 /// Line icons drawn in a 24-unit box, after the SF Symbols the iPad app uses (which can't ship on Linux).
 static void drawGlyph(QPainter &p, Glyph g, const QColor &c) {
@@ -84,6 +85,31 @@ static void drawGlyph(QPainter &p, Glyph g, const QColor &c) {
         p.drawRoundedRect(QRectF(-4.5, -9.5, 9, 19), 2.5, 2.5);
         p.drawLine(QPointF(-4.5, 1.5), QPointF(4.5, 1.5));
         p.restore();
+        break;
+    case Glyph::Lasso: {
+        QPen dashed(c, 1.8, Qt::CustomDashLine, Qt::RoundCap, Qt::RoundJoin);
+        dashed.setDashPattern({2.2, 2.2});
+        p.setPen(dashed);
+        p.drawEllipse(QRectF(3, 3.5, 18, 13));
+        p.setPen(QPen(c, 1.8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        QPainterPath tail(QPointF(8, 15.5));
+        tail.cubicTo(6, 18, 9, 21, 12, 21.5);
+        p.drawPath(tail);
+        break;
+    }
+    case Glyph::Share:
+        p.drawPolyline(QPolygonF({QPointF(8.5, 9), QPointF(5.5, 9), QPointF(5.5, 21), QPointF(18.5, 21), QPointF(18.5, 9), QPointF(15.5, 9)}));
+        p.drawLine(QPointF(12, 2.5), QPointF(12, 14.5));
+        p.drawPolyline(QPolygonF({QPointF(8.5, 6), QPointF(12, 2.5), QPointF(15.5, 6)}));
+        break;
+    case Glyph::WholeSlide:
+        p.drawEllipse(QRectF(3.5, 3.5, 13, 13));
+        p.drawLine(QPointF(14.6, 14.6), QPointF(20.5, 20.5));
+        p.drawLine(QPointF(7, 10), QPointF(13, 10));
+        break;
+    case Glyph::Grid:
+        for (int r = 0; r < 2; ++r)
+            for (int c = 0; c < 3; ++c) p.drawRoundedRect(QRectF(2.5 + c * 7, 5 + r * 7.5, 5.2, 5.6), 1, 1);
         break;
     case Glyph::Undo:
     case Glyph::Redo: {
@@ -199,6 +225,74 @@ protected:
 
 private:
     Deck *m_deck;
+};
+
+/// Every page as a thumbnail; click one to go there. Thumbnails render a few at a time so it opens at once.
+class SlideGrid : public QDialog {
+public:
+    SlideGrid(Deck *deck, QWidget *parent) : QDialog(parent), m_deck(deck) {
+        setWindowTitle(tr("Slides"));
+        auto *layout = new QVBoxLayout(this);
+        m_list = new QListWidget;
+        m_list->setViewMode(QListView::IconMode);
+        m_list->setResizeMode(QListView::Adjust);
+        m_list->setMovement(QListView::Static);
+        m_list->setUniformItemSizes(true);
+        m_list->setSpacing(10);
+        const QSizeF slide = deck->slideBox(0).size();
+        m_icon = QSize(220, int(220 * slide.height() / std::max(slide.width(), 1.0)));
+        m_list->setIconSize(m_icon);
+        QPixmap blank(m_icon);
+        blank.fill(QColor(128, 128, 128, 40));
+        for (int i = 0; i < deck->pageCount(); ++i) {
+            auto *item = new QListWidgetItem(QIcon(blank), QString::number(i + 1));
+            item->setTextAlignment(Qt::AlignHCenter);
+            m_list->addItem(item);
+        }
+        m_list->setCurrentRow(deck->page());
+        connect(m_list, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
+            m_deck->go(m_list->row(item));
+            accept();
+        });
+        connect(m_list, &QListWidget::itemActivated, this, [this](QListWidgetItem *item) {
+            m_deck->go(m_list->row(item));
+            accept();
+        });
+        layout->addWidget(m_list);
+        auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close);
+        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        layout->addWidget(buttons);
+        resize(parent->size() * 0.85);
+        connect(&m_timer, &QTimer::timeout, this, &SlideGrid::renderSome);
+        m_timer.start(0);
+        QTimer::singleShot(0, this, [this] { m_list->scrollToItem(m_list->currentItem(), QAbstractItemView::PositionAtCenter); });
+    }
+
+private:
+    // ponytail: renders every thumbnail in page order, current page first; render only visible ones if 500-page decks drag
+    void renderSome() {
+        const int n = m_deck->pageCount();
+        for (int k = 0; k < 4 && m_next < n; ++k, ++m_next) {
+            const int i = (m_deck->page() + m_next) % n;
+            QPdfDocument *doc = m_deck->doc();
+            const QSizeF page = doc->pagePointSize(i);
+            const QRectF part = m_deck->slideBox(i);
+            const double scale = m_icon.width() * devicePixelRatioF() / std::max(part.width(), 1.0);
+            QPdfDocumentRenderOptions options;
+            options.setScaledSize((page * scale).toSize());
+            options.setScaledClipRect(QRectF(part.topLeft() * scale, part.size() * scale).toRect());
+            QImage img = doc->render(i, (part.size() * scale).toSize(), options);
+            img.setDevicePixelRatio(devicePixelRatioF());
+            m_list->item(i)->setIcon(QIcon(QPixmap::fromImage(img)));
+        }
+        if (m_next >= n) m_timer.stop();
+    }
+
+    Deck *m_deck;
+    QListWidget *m_list;
+    QSize m_icon;
+    QTimer m_timer;
+    int m_next = 0;
 };
 
 class MainWindow : public QMainWindow {
@@ -348,6 +442,7 @@ private:
         row->addSpacing(8);
         row->addWidget(m_readerPage);
         row->addStretch(1);
+        row->addWidget(exportButton(page));
         auto *presentButton = new QPushButton(glyph(Glyph::Play, Qt::white), tr("Present"));
         presentButton->setObjectName("present");
         presentButton->setIconSize(QSize(14, 14));
@@ -405,6 +500,9 @@ private:
         };
 
         button(Glyph::Close, accent, tr("Stop Presenting"), [this] { stopPresenting(); })->setToolTip(tr("Stop presenting (Esc)"));
+        QAction *grid = button(Glyph::Grid, accent, tr("Slides"), [this] { SlideGrid(m_deck, this).exec(); });
+        grid->setShortcut(QKeySequence("G"));
+        grid->setToolTip(tr("All slides (G)"));
         m_pageLabel = new QLabel;
         QFont big = m_pageLabel->font();
         big.setPixelSize(20);
@@ -442,7 +540,7 @@ private:
         const struct { Tool tool; Glyph glyph; const char *name; const char *key; } toolList[] = {
             {Tool::Pointer, Glyph::Pointer, QT_TR_NOOP("Pointer"), "P"}, {Tool::Laser, Glyph::Laser, QT_TR_NOOP("Laser"), "L"},
             {Tool::Pen, Glyph::Pen, QT_TR_NOOP("Pen"), "D"}, {Tool::Highlighter, Glyph::Highlighter, QT_TR_NOOP("Highlighter"), "H"},
-            {Tool::Eraser, Glyph::Eraser, QT_TR_NOOP("Eraser"), "E"}};
+            {Tool::Eraser, Glyph::Eraser, QT_TR_NOOP("Eraser"), "E"}, {Tool::Lasso, Glyph::Lasso, QT_TR_NOOP("Lasso"), "S"}};
         for (const auto &t : toolList) {
             QAction *a = new QAction(glyph(t.glyph, primary()), tr(t.name), page);
             a->setCheckable(true);
@@ -458,7 +556,7 @@ private:
         }
         connect(m_toolGroup, &QActionGroup::triggered, this, [this](QAction *a) {
             const Tool tool = Tool(a->data().toInt());
-            if (tool == m_shownTool && (tool == Tool::Pen || tool == Tool::Highlighter)) showSizes(tool);
+            if (tool == m_shownTool && tool != Tool::Pointer && tool != Tool::Lasso) showOptions(tool);
             setTool(tool);
         });
         row->addWidget(tools);
@@ -486,7 +584,35 @@ private:
         m_redoAction->setShortcuts({QKeySequence::Redo, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z)});
         button(Glyph::Trash, destructive, tr("Clear Slide"), [this] { m_deck->clearSlide(); })
             ->setToolTip(tr("Remove the ink on this slide"));
+        m_wholeSlide = button(Glyph::WholeSlide, accent, tr("Whole Slide"), [this] { m_deck->resetZoom(); });
+        m_wholeSlide->setShortcuts({QKeySequence(Qt::CTRL | Qt::Key_0)});
+        m_wholeSlide->setToolTip(tr("Zoom out to the whole slide (Ctrl+0)"));
+        QAction *zoomIn = new QAction(tr("Zoom In"), page);
+        zoomIn->setShortcuts({QKeySequence::ZoomIn, QKeySequence(Qt::CTRL | Qt::Key_Equal)});
+        connect(zoomIn, &QAction::triggered, this, [this] { zoomStep(1.25); });
+        QAction *zoomOut = new QAction(tr("Zoom Out"), page);
+        zoomOut->setShortcuts({QKeySequence::ZoomOut, QKeySequence(Qt::CTRL | Qt::Key_Minus)});
+        connect(zoomOut, &QAction::triggered, this, [this] { zoomStep(0.8); });
+        page->addActions({zoomIn, zoomOut});
+        // Lasso selection: Delete, and the clipboard keys.
+        const struct { QKeySequence key; void (Deck::*fn)(); } editKeys[] = {
+            {QKeySequence::Delete, &Deck::deleteSelection}, {QKeySequence::Cut, &Deck::cutSelection},
+            {QKeySequence::Copy, &Deck::copySelection}, {QKeySequence(Qt::CTRL | Qt::Key_D), &Deck::duplicateSelection}};
+        for (const auto &k : editKeys) {
+            QAction *a = new QAction(page);
+            a->setShortcut(k.key);
+            connect(a, &QAction::triggered, m_deck, k.fn);
+            page->addAction(a);
+        }
+        QAction *pasteAction = new QAction(page);
+        pasteAction->setShortcut(QKeySequence::Paste);
+        connect(pasteAction, &QAction::triggered, this, [this] {
+            const QRectF full(QPointF(0, 0), m_deck->slideBox(m_deck->page()).size());
+            m_deck->paste(m_deck->zoom().value_or(full).center());
+        });
+        page->addAction(pasteAction);
         row->addStretch(1);
+        row->addWidget(exportButton(page));
 
         m_projectorButton = new QToolButton;
         m_projectorButton->setIconSize(QSize(barIcon, barIcon));
@@ -510,6 +636,10 @@ private:
         page->addAction(freeze);
         projectorMenu->addAction(tr("Show Slides"), this, [this] { m_deck->setProjector(Deck::Projector::Slides); });
         projectorMenu->addSeparator();
+        m_followZoomAction = projectorMenu->addAction(tr("Projector Follows Zoom"));
+        m_followZoomAction->setCheckable(true);
+        m_followZoomAction->setChecked(m_deck->projectorFollowsZoom());
+        connect(m_followZoomAction, &QAction::toggled, m_deck, &Deck::setProjectorFollowsZoom);
         m_notesAction = projectorMenu->addAction(tr("Speaker Notes"));
         m_notesAction->setCheckable(true);
         m_notesAction->setChecked(true);
@@ -556,21 +686,17 @@ private:
         return page;
     }
 
-    void showSizes(Tool tool) {
-        QMenu menu;
-        const struct { const char *name; double pen, highlighter; } sizes[] = {
-            {QT_TR_NOOP("Fine"), 0.8, 6}, {QT_TR_NOOP("Medium"), 1.5, 10}, {QT_TR_NOOP("Bold"), 3, 16}};
-        const bool pen = tool == Tool::Pen;
-        for (const auto &sz : sizes) {
-            QAction *a = menu.addAction(tr(sz.name), this, [this, pen, sz] {
-                (pen ? m_tools.penWidth : m_tools.highlighterWidth) = pen ? sz.pen : sz.highlighter;
-                saveSettings();
-            });
-            a->setCheckable(true);
-            a->setChecked((pen ? m_tools.penWidth : m_tools.highlighterWidth) == (pen ? sz.pen : sz.highlighter));
-        }
+    /// Tap the selected tool again for its settings, as on the iPad.
+    void showOptions(Tool tool) {
+        auto *options = new ToolOptions(tool, &m_tools, m_deck, [this] {
+            m_slide->updateCursor();
+            saveSettings();
+            m_slide->update();
+        }, this);
+        options->setAttribute(Qt::WA_DeleteOnClose);
         QToolButton *b = m_toolButtons[tool];
-        menu.exec(b->mapToGlobal(QPoint(0, b->height())));
+        options->move(b->mapToGlobal(QPoint(0, b->height())));
+        options->show();
     }
 
     void setTool(Tool tool) {
@@ -589,6 +715,50 @@ private:
             m_swatches[i]->setIcon(swatchIcon(c, c == (hl ? m_tools.highlighterColor : m_tools.penColor)));
             m_swatches[i]->setToolTip(hl ? tr("Highlighter colour") : tr("Pen colour"));
         }
+    }
+
+    void zoomStep(double factor) {
+        if (!m_deck->presenting()) return;
+        const QRectF full(QPointF(0, 0), m_deck->slideBox(m_deck->page()).size());
+        m_deck->zoomBy(factor, m_deck->zoom().value_or(full).center());
+    }
+
+    /// Share icon: the deck with your ink as a PDF, one page per slide (notes) or every overlay step.
+    QToolButton *exportButton(QWidget *page) {
+        auto *b = new QToolButton;
+        b->setIcon(glyph(Glyph::Share, accent));
+        b->setIconSize(QSize(barIcon, barIcon));
+        b->setToolTip(tr("Export with ink"));
+        b->setPopupMode(QToolButton::InstantPopup);
+        b->setFocusPolicy(Qt::NoFocus);
+        auto *menu = new QMenu(b);
+        menu->addAction(tr("Export Notes…"), this, [this] { exportPdf(true); })
+            ->setToolTip(tr("One page per slide, fully uncovered, with your ink"));
+        menu->addAction(tr("Export Every Page…"), this, [this] { exportPdf(false); });
+        menu->setToolTipsVisible(true);
+        b->setMenu(menu);
+        Q_UNUSED(page);
+        return b;
+    }
+
+    void exportPdf(bool notesOnly) {
+        const Pdf::Document *raw = m_deck->raw();
+        if (!raw) return;
+        const QString suggested = QFileInfo(m_deck->path()).dir().filePath(
+            m_deck->name() + (notesOnly ? tr(" (notes).pdf") : tr(" (annotated).pdf")));
+        const QString path = QFileDialog::getSaveFileName(this, notesOnly ? tr("Export Notes") : tr("Export Every Page"),
+                                                          suggested, tr("PDF (*.pdf)"));
+        if (path.isEmpty()) return;
+        QVector<Media::ExportPage> pages;
+        QVector<int> indices = m_deck->lastSteps();
+        if (!notesOnly) { indices.clear(); for (int i = 0; i < m_deck->pageCount(); ++i) indices << i; }
+        for (int i : indices) pages << Media::ExportPage{i, m_deck->slideBox(i), m_deck->inkOf(i)};
+        QGuiApplication::setOverrideCursor(Qt::WaitCursor);
+        const QByteArray pdf = Media::exportPdf(*raw, pages);
+        QSaveFile f(path);
+        const bool ok = f.open(QIODevice::WriteOnly) && f.write(pdf) == pdf.size() && f.commit();
+        QGuiApplication::restoreOverrideCursor();
+        if (!ok) QMessageBox::warning(this, tr("Export failed"), tr("Could not write %1:\n%2").arg(path, f.errorString()));
     }
 
     void stopPresenting() {
@@ -647,6 +817,8 @@ private:
         m_readerTitle->setText(m_deck->name());
         m_readerPage->setText(QStringLiteral("%1 / %2").arg(m_pdf->pageNavigator()->currentPage() + 1).arg(n));
         m_pageLabel->setText(QStringLiteral("%1 / %2").arg(m_deck->page() + 1).arg(n));
+        m_wholeSlide->setVisible(m_deck->zoom().has_value());
+        m_followZoomAction->setChecked(m_deck->projectorFollowsZoom());
         m_undoAction->setEnabled(m_deck->canUndo());
         m_redoAction->setEnabled(m_deck->canRedo());
         m_notes->setVisible(m_deck->hasNotes() && m_notesAction->isChecked());
@@ -666,6 +838,15 @@ private:
         m_tools.highlighterColor = s.value("highlighterColor", m_tools.highlighterColor).value<QColor>();
         m_tools.penWidth = s.value("penWidth", m_tools.penWidth).toDouble();
         m_tools.highlighterWidth = s.value("highlighterWidth", m_tools.highlighterWidth).toDouble();
+        m_tools.partialEraser = s.value("partialEraser", m_tools.partialEraser).toBool();
+        m_tools.eraserSize = s.value("eraserSize", m_tools.eraserSize).toDouble();
+        m_tools.penStyle = s.value("penStyle", "fountain").toString() == "ball" ? ToolSettings::Ball : ToolSettings::Fountain;
+        m_tools.fine = s.value("pressureFine", m_tools.fine).toDouble();
+        m_tools.firm = s.value("pressureFirm", m_tools.firm).toDouble();
+        LaserStyle &laser = m_deck->laserStyle;
+        laser.trail = s.value("laserTrail", laser.trail).toBool();
+        laser.dot = s.value("laserDotSize", laser.dot).toDouble();
+        laser.width = s.value("laserTrailWidth", laser.width).toDouble();
     }
 
     void saveSettings() {
@@ -675,6 +856,14 @@ private:
         s.setValue("highlighterColor", m_tools.highlighterColor);
         s.setValue("penWidth", m_tools.penWidth);
         s.setValue("highlighterWidth", m_tools.highlighterWidth);
+        s.setValue("partialEraser", m_tools.partialEraser);
+        s.setValue("eraserSize", m_tools.eraserSize);
+        s.setValue("penStyle", m_tools.penStyle == ToolSettings::Ball ? "ball" : "fountain");
+        s.setValue("pressureFine", m_tools.fine);
+        s.setValue("pressureFirm", m_tools.firm);
+        s.setValue("laserTrail", m_deck->laserStyle.trail);
+        s.setValue("laserDotSize", m_deck->laserStyle.dot);
+        s.setValue("laserTrailWidth", m_deck->laserStyle.width);
         updateSwatches();
     }
 
@@ -692,7 +881,7 @@ private:
     QHash<Tool, QToolButton *> m_toolButtons;
     Tool m_shownTool = Tool::Pen;
     QList<QAction *> m_swatches;
-    QAction *m_undoAction, *m_redoAction, *m_notesAction;
+    QAction *m_undoAction, *m_redoAction, *m_notesAction, *m_wholeSlide, *m_followZoomAction;
     QPushButton *m_banner;
     SlideView *m_slide, *m_notes;
     ProjectorWindow *m_projector = nullptr;

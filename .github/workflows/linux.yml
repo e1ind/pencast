@@ -31,17 +31,17 @@ jobs:
         run: |
           dnf install -y dnf-plugins-core epel-release
           dnf config-manager --set-enabled crb
-          dnf install -y cmake gcc-c++ rpm-build qt6-qtbase-devel qt6-qtpdf-devel
+          dnf install -y cmake gcc-c++ rpm-build qt6-qtbase-devel qt6-qtpdf-devel qt6-qtmultimedia-devel
       - name: Install build tools and Qt (Fedora)
         if: matrix.family == 'fedora'
-        run: dnf install -y cmake gcc-c++ rpm-build qt6-qtbase-devel qt6-qtpdf-devel
+        run: dnf install -y cmake gcc-c++ rpm-build qt6-qtbase-devel qt6-qtpdf-devel qt6-qtmultimedia-devel
       - name: Install build tools and Qt (Debian, Ubuntu)
         if: matrix.family == 'debian'
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends cmake g++ dpkg-dev file qt6-base-dev qt6-pdf-dev
+          apt-get install -y --no-install-recommends cmake g++ dpkg-dev file qt6-base-dev qt6-pdf-dev qt6-multimedia-dev
       - uses: actions/checkout@v4
       - name: Build and test
         run: |
@@ -71,7 +71,7 @@ jobs:
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
-          modules: 'qtpdf'
+          modules: 'qtpdf qtmultimedia'
           cache: true
       - name: Build and test
         run: |

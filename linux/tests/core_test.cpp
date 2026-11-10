@@ -44,6 +44,29 @@ int main() {
     CHECK(!Ink::hits(s, QPointF(30, 20), 2));
     CHECK(Ink::hits(h, QPointF(0, 46), 2));   // a single-point stroke is a dot
 
+    // Partial eraser: a cut through the middle of a line leaves two pieces; a miss changes nothing.
+    {
+        const Stroke line{Stroke::Pen, Qt::black, {{QPointF(0, 0), 2}, {QPointF(100, 0), 2}}};
+        const auto cut = Ink::cut({line}, QPointF(50, -20), QPointF(50, 20), 5);
+        CHECK(cut && cut->size() == 2);
+        if (cut && cut->size() == 2) {
+            CHECK((*cut)[0].points.last().p.x() < 44 && (*cut)[1].points.first().p.x() > 56);
+            CHECK(near((*cut)[0].points.first().p.x(), 0) && near((*cut)[1].points.last().p.x(), 100));
+        }
+        CHECK(!Ink::cut({line}, QPointF(50, 30), QPointF(60, 30), 5));
+        const auto all = Ink::cut({line}, QPointF(-10, 0), QPointF(110, 0), 5);   // erased entirely
+        CHECK(all && all->isEmpty());
+    }
+
+    // Lasso picks strokes mostly inside; bounds include the line width.
+    {
+        const Stroke in{Stroke::Pen, Qt::black, {{QPointF(10, 10), 2}, {QPointF(20, 10), 2}}};
+        const Stroke out{Stroke::Pen, Qt::black, {{QPointF(80, 80), 2}, {QPointF(90, 80), 2}}};
+        const QPolygonF lasso({QPointF(0, 0), QPointF(50, 0), QPointF(50, 50), QPointF(0, 50)});
+        CHECK(Ink::inside({in, out}, lasso) == QVector<int>{0});
+        CHECK(Ink::bounds({in, out}, {0}) == QRectF(9, 9, 12, 2));
+    }
+
     std::printf(failures ? "%d check(s) failed\n" : "all checks passed\n", failures);
     return failures ? 1 : 0;
 }

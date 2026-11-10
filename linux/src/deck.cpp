@@ -1,5 +1,7 @@
 #include "deck.h"
+#include "playback.h"
 
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
@@ -8,7 +10,10 @@
 #include <QPdfDocument>
 #include <QPdfSelection>
 #include <QSaveFile>
+#include <QSettings>
 #include <QStandardPaths>
+#include <QThread>
+#include <QUrl>
 
 static qint64 now() { return QDateTime::currentMSecsSinceEpoch(); }
 
@@ -30,9 +35,13 @@ Deck::Deck(QObject *parent) : QObject(parent) {
     // ponytail: polls once a second; a file watcher loses the file when LaTeX replaces it.
     m_pollTimer.setInterval(1000);
     connect(&m_pollTimer, &QTimer::timeout, this, &Deck::poll);
+    m_followZoom = QSettings().value("projectorFollowsZoom", false).toBool();
 }
 
-Deck::~Deck() { close(); }
+Deck::~Deck() {
+    close();
+    for (const auto &t : std::as_const(m_extracting)) if (t) t->wait();
+}
 
 QString Deck::open(const QString &path) {
     close();
@@ -46,6 +55,7 @@ QString Deck::open(const QString &path) {
     m_path = QFileInfo(path).absoluteFilePath();
     m_page = 0;
     structure();
+    scanMedia();
     loadInk();
     m_seen = stat(m_path);
     m_pollTimer.start();
@@ -58,6 +68,11 @@ void Deck::close() {
     if (!m_doc) return;
     m_pollTimer.stop();
     saveInk();
+    stopMedia();
+    m_raw.reset();
+    m_media.clear();
+    m_zoom.reset();
+    m_selection.clear();
     QPdfDocument *old = m_doc;
     m_doc = nullptr;
     ++m_generation;
@@ -75,9 +90,18 @@ int Deck::pageCount() const { return m_doc ? m_doc->pageCount() : 0; }
 
 void Deck::go(int page) {
     if (page < 0 || page >= pageCount() || page == m_page) return;
+    QVector<MediaItem> next;
+    for (const MediaItem &m : m_media) if (m.page == page) next << m;
+    const auto kept = stopMedia(next);
     m_page = page;
     m_live.reset();
     m_laser.clear();
+    m_zoom.reset();
+    m_selection.clear();
+    if (m_presenting) {   // reading view: nothing plays while scrolling
+        startMedia(kept);
+        prepareVideos(page + 1);
+    }
     emit changed();
 }
 
@@ -93,6 +117,13 @@ void Deck::setPresenting(bool on) {
     m_frozen = {};
     m_live.reset();
     m_laser.clear();
+    m_zoom.reset();
+    m_selection.clear();
+    stopMedia();
+    if (on) {
+        startMedia();
+        prepareVideos(m_page + 1);
+    }
     emit changed();
 }
 
@@ -152,6 +183,7 @@ void Deck::eraseAt(QPointF p, double radius) {
 void Deck::undo() {
     auto &stack = m_undo[inkKey()];
     if (stack.isEmpty()) return;
+    m_selection.clear();
     m_redo[inkKey()].append(ink());
     inkRef() = stack.takeLast();
     inkEdited();
@@ -160,12 +192,14 @@ void Deck::undo() {
 void Deck::redo() {
     auto &stack = m_redo[inkKey()];
     if (stack.isEmpty()) return;
+    m_selection.clear();
     m_undo[inkKey()].append(ink());
     inkRef() = stack.takeLast();
     inkEdited();
 }
 
 void Deck::clearSlide() {
+    m_selection.clear();
     if (ink().isEmpty()) return;
     pushUndo();
     inkRef().clear();
@@ -225,10 +259,15 @@ void Deck::reload() {
     auto *doc = new QPdfDocument(this);
     if (doc->load(m_path) != QPdfDocument::Error::None || doc->pageCount() == 0) { delete doc; return; }
     QPdfDocument *old = m_doc;
+    stopMedia();
     m_doc = doc;
     ++m_generation;
     m_page = std::min(m_page, doc->pageCount() - 1);
+    m_selection.clear();
+    m_zoom.reset();
     structure();
+    scanMedia();
+    if (m_presenting) startMedia();
     m_undo.clear(); m_redo.clear();   // undo steps may belong to slides that no longer exist
     m_live.reset();
     emit reloaded();
@@ -240,7 +279,7 @@ void Deck::reload() {
 
 void Deck::laserPress(QPointF p) {
     if (now() - m_laserLiftedAt > laserHoldMs + laserFadeMs) m_laser.clear();   // lines fade out together
-    m_laser.append({{p, now()}});
+    if (laserStyle.trail) m_laser.append({{p, now()}});
     m_laserPressing = true;
     m_laserDot = p;
     m_laserTimer.start();
@@ -270,4 +309,270 @@ void Deck::laserTick() {
         m_laserTimer.stop();
     }
     emit drawn();
+}
+
+// MARK: Partial eraser and lasso
+
+void Deck::eraseAlong(QPointF a, QPointF b, double radius) {
+    const auto cut = Ink::cut(ink(), a, b, radius);
+    if (!cut) return;
+    if (!m_eraseSnapshot) { pushUndo(); m_eraseSnapshot = true; }
+    m_selection.clear();
+    inkRef() = *cut;
+    inkEdited();
+}
+
+void Deck::select(const QPolygonF &lasso) {
+    m_selection = Ink::inside(ink(), lasso);
+    emit changed();
+}
+
+void Deck::clearSelection() {
+    if (m_selection.isEmpty()) return;
+    m_selection.clear();
+    emit changed();
+}
+
+void Deck::beginMove() { if (!m_selection.isEmpty()) pushUndo(); }
+
+void Deck::moveSelection(QPointF delta) {
+    QVector<Stroke> &strokes = inkRef();
+    for (int i : std::as_const(m_selection))
+        if (i < strokes.size()) for (InkPoint &p : strokes[i].points) p.p += delta;
+    emit changed();
+}
+
+void Deck::endMove() { if (!m_selection.isEmpty()) inkEdited(); }
+
+void Deck::deleteSelection() {
+    if (m_selection.isEmpty()) return;
+    pushUndo();
+    QVector<Stroke> &strokes = inkRef();
+    QVector<int> sorted = m_selection;
+    std::sort(sorted.rbegin(), sorted.rend());
+    for (int i : sorted) if (i < strokes.size()) strokes.removeAt(i);
+    m_selection.clear();
+    inkEdited();
+}
+
+void Deck::copySelection() {
+    m_clipboard.clear();
+    for (int i : std::as_const(m_selection)) if (i < ink().size()) m_clipboard << ink()[i];
+}
+
+void Deck::duplicateSelection() {
+    copySelection();
+    if (m_clipboard.isEmpty()) return;
+    paste(selectionBounds().center() + QPointF(12, 12));
+}
+
+void Deck::paste(QPointF at) {
+    if (m_clipboard.isEmpty()) return;
+    pushUndo();
+    const QPointF delta = at - Ink::bounds(m_clipboard, [&] { QVector<int> all; for (int i = 0; i < m_clipboard.size(); ++i) all << i; return all; }()).center();
+    QVector<Stroke> &strokes = inkRef();
+    m_selection.clear();
+    for (Stroke s : std::as_const(m_clipboard)) {
+        for (InkPoint &p : s.points) p.p += delta;
+        m_selection << strokes.size();
+        strokes << s;
+    }
+    inkEdited();
+}
+
+QVector<Stroke> Deck::inkOf(int page) const {
+    const int start = m_frameStart.value(page, page);
+    return m_ink.value(m_keys.value(start, QString::number(start)));
+}
+
+QVector<int> Deck::lastSteps() const {
+    QVector<int> out;
+    for (int i = 0; i < pageCount(); ++i)
+        if (i + 1 == pageCount() || m_frameStart.value(i + 1) != m_frameStart.value(i)) out << i;
+    return out;
+}
+
+// MARK: Zoom
+
+void Deck::setZoom(std::optional<QRectF> r) {
+    const QRectF full(QPointF(0, 0), slideBox(m_page).size());
+    if (r && !full.isEmpty()) {
+        const double w = std::clamp(r->width(), full.width() / maxZoom, full.width());
+        if (w >= full.width() * 0.98) {
+            r.reset();
+        } else {
+            const double h = w * full.height() / full.width();
+            const QPointF c = r->center();
+            r = QRectF(std::clamp(c.x() - w / 2, 0.0, full.width() - w), std::clamp(c.y() - h / 2, 0.0, full.height() - h), w, h);
+        }
+    } else {
+        r.reset();
+    }
+    if (r == m_zoom) return;
+    m_zoom = r;
+    emit changed();
+}
+
+void Deck::zoomBy(double factor, QPointF anchor) {
+    if (factor <= 0) return;
+    const QRectF full(QPointF(0, 0), slideBox(m_page).size());
+    const QRectF v = m_zoom.value_or(full);
+    const double w = std::clamp(v.width() / factor, full.width() / maxZoom, full.width()), k = w / v.width();
+    setZoom(QRectF(anchor - (anchor - v.topLeft()) * k, v.size() * k));
+}
+
+void Deck::pan(QPointF delta) { if (m_zoom) setZoom(m_zoom->translated(delta)); }
+void Deck::resetZoom() { setZoom(std::nullopt); }
+
+void Deck::setProjectorFollowsZoom(bool on) {
+    m_followZoom = on;
+    QSettings().setValue("projectorFollowsZoom", on);
+    emit changed();
+}
+
+// MARK: Links
+
+std::optional<Media::Link> Deck::linkAt(QPointF p) const {
+    if (!m_raw) return std::nullopt;
+    for (const Media::Link &l : Media::links(*m_raw, m_page)) {
+        const QRectF r = Media::onPage(l.rect, m_raw->pageBox(m_page)).translated(-slideBox(m_page).topLeft());
+        if (r.contains(p)) return l;
+    }
+    return std::nullopt;
+}
+
+void Deck::follow(const Media::Link &link) {
+    switch (link.action) {
+    case Media::Link::GoTo: go(link.page); break;
+    case Media::Link::Next: go(m_page + 1); break;
+    case Media::Link::Previous: go(m_page - 1); break;
+    case Media::Link::First: go(0); break;
+    case Media::Link::Last: go(pageCount() - 1); break;
+    }
+}
+
+// MARK: Media
+
+void Deck::scanMedia() {
+    m_media.clear();
+    m_raw = std::make_unique<Pdf::Document>();
+    if (!m_raw->load(m_path)) return;
+    for (int p = 0; p < m_raw->pageCount(); ++p) m_media += Media::scan(*m_raw, p);
+}
+
+QVector<MediaItem> Deck::pageMedia() const {
+    QVector<MediaItem> out;
+    for (const MediaItem &m : m_media) if (m.page == m_page) out << m;
+    return out;
+}
+
+QRectF Deck::mediaRect(const MediaItem &item) const {
+    if (!m_raw) return {};
+    return Media::onPage(item.rect, m_raw->pageBox(item.page)).translated(-slideBox(item.page).topLeft());
+}
+
+QString Deck::problem(const QString &id) const {
+    if (const Video *v = m_videos.value(id); v && !v->error().isEmpty()) return v->error();
+    return m_problems.value(id);
+}
+
+/// Stops this page's media, except videos that continue on the next page: Beamer overlays (\pause,
+/// \only) repeat the same video at the same place on consecutive pages, and it should keep playing
+/// rather than restart at every step. Returns those, keyed by continuity.
+QHash<QString, Video *> Deck::stopMedia(const QVector<MediaItem> &next) {
+    QSet<QString> continuing;
+    for (const MediaItem &m : next) continuing << m.continuity();
+    QHash<QString, Video *> kept;
+    for (const MediaItem &item : pageMedia()) {
+        Video *v = m_videos.value(item.id());
+        if (!v) continue;
+        if (continuing.contains(item.continuity())) kept[item.continuity()] = v;
+        else v->deleteLater();
+    }
+    qDeleteAll(m_animations);
+    m_videos.clear();
+    m_animations.clear();
+    m_problems.clear();
+    return kept;
+}
+
+void Deck::startMedia(const QHash<QString, Video *> &kept) {
+    if (!m_raw) return;
+    for (const MediaItem &item : pageMedia()) {
+        if (Video *v = kept.value(item.continuity())) { m_videos[item.id()] = v; continue; }
+        switch (item.kind) {
+        case MediaItem::EmbeddedVideo: {
+            // Extracted once per deck version: every later slide using the same file reuses it.
+            const QString file = videoFile(item);
+            if (QFileInfo::exists(file)) loadVideo(item, QUrl::fromLocalFile(file));
+            else extract(item, file);
+            break;
+        }
+        case MediaItem::LinkedVideo: {
+            const QUrl url = item.source.contains("://") ? QUrl(item.source)
+                             : QUrl::fromLocalFile(QFileInfo(m_path).dir().absoluteFilePath(item.source));
+            if (url.isLocalFile() && !QFileInfo(url.toLocalFile()).isReadable())
+                m_problems[item.id()] = tr("Linked video not found:\n%1").arg(item.source);
+            else loadVideo(item, url);
+            break;
+        }
+        case MediaItem::Animation: {
+            auto *a = new Animation(Media::animationFrames(*m_raw, item), item, this);
+            if (!a->valid()) { delete a; m_problems[item.id()] = tr("animate frames not found"); break; }
+            connect(a, &Animation::updated, this, &Deck::drawn);
+            m_animations[item.id()] = a;
+            break;
+        }
+        case MediaItem::Unsupported: m_problems[item.id()] = item.source; break;
+        }
+    }
+}
+
+void Deck::loadVideo(const MediaItem &item, const QUrl &url) {
+    auto *v = new Video(url, item.autoplay, item.loop, this);
+    connect(v, &Video::updated, this, &Deck::drawn);
+    m_videos[item.id()] = v;
+}
+
+/// Per deck version: a recompiled PDF never plays stale cached videos.
+QString Deck::videoFile(const MediaItem &item) const {
+    const QString deck = QString::fromLatin1(QCryptographicHash::hash(m_path.toUtf8(), QCryptographicHash::Sha1).toHex().left(12));
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/Media/" + deck + '-'
+           + QString::number(m_seen.first / 1000) + '/' + item.source;
+}
+
+/// Unpacks a video off the GUI thread from its own copy of the PDF; the slide shows its poster meanwhile.
+void Deck::extract(const MediaItem &item, const QString &file) {
+    if (!m_extracting.value(file)) {
+        QThread *t = QThread::create([path = m_path, item, file] {
+            Pdf::Document doc;
+            if (!doc.load(path)) return;
+            const auto data = Media::embeddedVideo(doc, item);
+            if (!data) return;
+            QDir().mkpath(QFileInfo(file).path());
+            QSaveFile f(file);
+            if (f.open(QIODevice::WriteOnly) && f.write(*data) == data->size()) f.commit();
+        });
+        m_extracting[file] = t;
+        connect(t, &QThread::finished, this, [this, t, file] {
+            m_extracting.remove(file);
+            t->deleteLater();
+            for (const MediaItem &m : pageMedia()) {
+                if (m.kind != MediaItem::EmbeddedVideo || videoFile(m) != file || m_videos.contains(m.id()) || !m_presenting) continue;
+                if (QFileInfo::exists(file)) loadVideo(m, QUrl::fromLocalFile(file));
+                else m_problems[m.id()] = tr("Could not unpack the video %1 from the PDF.").arg(m.source);
+            }
+            emit drawn();
+        });
+        t->start();
+    }
+}
+
+/// Unpack the next slide's embedded videos ahead of time, so they start the moment you get there.
+void Deck::prepareVideos(int page) {
+    for (const MediaItem &m : std::as_const(m_media)) {
+        if (m.page != page || m.kind != MediaItem::EmbeddedVideo) continue;
+        const QString file = videoFile(m);
+        if (!QFileInfo::exists(file)) extract(m, file);
+    }
 }

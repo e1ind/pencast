@@ -44,30 +44,32 @@ cp -R build/mac/Build/Products/Release-maccatalyst/PenCast.app /Applications/
 ## Linux
 
 The Linux app is a separate Qt 6 program in `linux/` (C++, CMake). It needs Qt 6.4 or later with the Qt PDF
-module. On Rocky Linux 9 (and RHEL / AlmaLinux 9), Qt PDF comes from EPEL:
+and Qt Multimedia modules. On Rocky Linux 9 (and RHEL / AlmaLinux 9), Qt PDF comes from EPEL:
 
 ```sh
 sudo dnf install epel-release
 sudo dnf config-manager --set-enabled crb
-sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtpdf-devel
+sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtpdf-devel qt6-qtmultimedia-devel
 ```
 
-On Fedora: `sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtpdf-devel`. On Ubuntu 24.04 / Debian 13:
-`sudo apt install cmake g++ qt6-base-dev qt6-pdf-dev`. Then, from the repository root:
+On Fedora: `sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtpdf-devel qt6-qtmultimedia-devel`. On Ubuntu 24.04 /
+Debian 13: `sudo apt install cmake g++ qt6-base-dev qt6-pdf-dev qt6-multimedia-dev`. Then, from the repository root:
 
 ```sh
 cmake -B build/linux -S linux -DCMAKE_BUILD_TYPE=Release
 cmake --build build/linux -j
-ctest --test-dir build/linux          # ink logic, plus simulated pen, eraser and finger input
+ctest --test-dir build/linux          # ink, media scanner (against Corpus/), simulated pen/lasso/zoom input
 sudo cmake --install build/linux      # pencast command, app menu entry and icon (under /usr/local)
 ```
 
 `pencast deck.pdf` opens a deck in the reading view; `pencast --present deck.pdf` starts presenting. Point your
 LaTeX editor's PDF viewer at `pencast %f` and the open deck reloads after every compile. The same sources build on
-a Mac for development (`brew install cmake qtbase qtwebengine`, then add `-DCMAKE_PREFIX_PATH=$(brew --prefix)`).
+a Mac for development (`brew install cmake qtbase qtwebengine qtmultimedia`, then add `-DCMAKE_PREFIX_PATH=$(brew --prefix)`).
 
-Ink is saved in `~/.local/share/PenCast/Ink/`. Not on Linux yet: embedded videos and `animate`, zoom, the lasso,
-the partial eraser, and export.
+Ink is saved in `~/.local/share/PenCast/Ink/`, unpacked videos are cached in `~/.cache/PenCast/Media/`. Qt's PDF
+module cannot see annotations, so `linux/src/pdf.cpp` reads the PDF's objects itself and `media.cpp` is a line-by-line
+port of `MediaScanner.swift`: keep the two in step. Videos play through the system's Qt Multimedia backend (FFmpeg
+or GStreamer); a missing codec shows as a message on the video, not a blank.
 
 ## Making a release
 

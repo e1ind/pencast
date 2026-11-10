@@ -55,8 +55,8 @@ open the disk image and drag PenCast to Applications. Requires macOS 14 or later
 
 **iPad:** coming to the App Store. Until then you can [build it from source](docs/BUILDING.md).
 
-**Linux (beta):** the reading view, presenting, projector, laser, pen, highlighter and eraser, with a mouse,
-touch or a pen tablet (videos, animations, zoom and export come next). Download the package for your system:
+**Linux (beta):** everything above, with a mouse, touch or a pen tablet: videos and animations in place, pen,
+highlighter, lasso, whole-stroke and partial eraser, zoom, projector and export. Download the package for your system:
 
 | System | Download | Install |
 | --- | --- | --- |
@@ -69,7 +69,14 @@ touch or a pen tablet (videos, animations, zoom and export come next). Download 
 | Any other (openSUSE, Arch, …) | [PenCast-x86_64.AppImage](https://github.com/e1ind/pencast/releases/latest/download/PenCast-x86_64.AppImage) | `chmod +x PenCast-x86_64.AppImage`, then run it |
 
 The packages use your system's Qt; Rocky and RHEL get its PDF module from EPEL (on RHEL, enable the
-CodeReady Builder repository too). Then point your LaTeX editor's PDF viewer at `pencast %f`. You can also
+CodeReady Builder repository too).
+
+Embedded videos are almost always H.264, which Fedora, Rocky and RHEL leave out for patent reasons. Add it from
+RPM Fusion (Rocky / RHEL 10: `sudo dnf install https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-10.noarch.rpm`,
+Fedora: `…/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm`), then
+`sudo dnf install gstreamer1-plugin-libav && sudo dnf swap ffmpeg-free ffmpeg --allowerasing`. Ubuntu and Debian
+play it out of the box, and so does the AppImage, which brings its own decoder. Without it a video shows a
+message in place of the picture; the rest of the slide still works. Then point your LaTeX editor's PDF viewer at `pencast %f`. You can also
 [build it from source](docs/BUILDING.md#linux).
 
 ## Help bring PenCast to the App Store
@@ -85,7 +92,7 @@ toward that goal makes the release possible.
 ## Roadmap
 
 - **App Store release** for iPad and Mac.
-- **Linux:** videos and animations, zoom and export; Flatpak. **Windows** from the same Qt code.
+- **Linux:** Flatpak. **Windows** from the same Qt code.
 - **PowerPoint and Keynote:** present their PDF exports with the original videos playing in place.
 - **More sources:** any app that exports PDF (Google Slides, LibreOffice Impress) already works without video.
 

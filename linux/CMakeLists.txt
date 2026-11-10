@@ -6,15 +6,16 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Pdf PdfWidgets)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Pdf PdfWidgets Multimedia Test)
 
 # Logic without windows or PDF rendering, shared with the test.
-add_library(pencastcore STATIC src/core.cpp)
+add_library(pencastcore STATIC src/core.cpp src/pdf.cpp src/media.cpp)
 target_link_libraries(pencastcore PUBLIC Qt6::Gui)
 target_include_directories(pencastcore PUBLIC src)
 
-add_executable(pencast src/main.cpp src/deck.cpp src/slideview.cpp)
-target_link_libraries(pencast PRIVATE pencastcore Qt6::Widgets Qt6::Pdf Qt6::PdfWidgets)
+add_executable(pencast src/main.cpp src/deck.cpp src/slideview.cpp src/playback.cpp src/playback.h
+               src/tooloptions.cpp src/tooloptions.h)
+target_link_libraries(pencast PRIVATE pencastcore Qt6::Widgets Qt6::Pdf Qt6::PdfWidgets Qt6::Multimedia)
 target_compile_definitions(pencast PRIVATE PENCAST_VERSION="${PROJECT_VERSION}")
 
 include(GNUInstallDirs)
@@ -45,7 +46,13 @@ add_executable(core_test tests/core_test.cpp)
 target_link_libraries(core_test PRIVATE pencastcore)
 add_test(NAME core COMMAND core_test)
 
-add_executable(input_test tests/input_test.cpp src/deck.cpp src/slideview.cpp)
-target_link_libraries(input_test PRIVATE pencastcore Qt6::Widgets Qt6::Pdf)
-target_compile_definitions(input_test PRIVATE DECK_PDF="${CMAKE_CURRENT_SOURCE_DIR}/../Corpus/stress_100.pdf")
+add_executable(input_test tests/input_test.cpp src/deck.cpp src/slideview.cpp src/playback.cpp src/playback.h)
+target_link_libraries(input_test PRIVATE pencastcore Qt6::Widgets Qt6::Pdf Qt6::Multimedia Qt6::Test)
+target_compile_definitions(input_test PRIVATE DECK_PDF="${CMAKE_CURRENT_SOURCE_DIR}/../Corpus/stress_100.pdf"
+                           CORPUS="${CMAKE_CURRENT_SOURCE_DIR}/../Corpus")
 add_test(NAME input COMMAND input_test)
+
+add_executable(media_test tests/media_test.cpp)
+target_link_libraries(media_test PRIVATE pencastcore Qt6::Pdf)
+target_compile_definitions(media_test PRIVATE CORPUS="${CMAKE_CURRENT_SOURCE_DIR}/../Corpus")
+add_test(NAME media COMMAND media_test)

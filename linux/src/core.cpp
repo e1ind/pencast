@@ -3,6 +3,7 @@
 #include <QCryptographicHash>
 #include <QHash>
 #include <QJsonObject>
+#include <QLineF>
 #include <algorithm>
 #include <cmath>
 
@@ -93,6 +94,63 @@ bool hits(const Stroke &s, QPointF p, double radius) {
         if (distanceToSegment(p, a.p, b.p) <= radius + std::max(a.w, b.w) / 2) return true;
     }
     return false;
+}
+
+std::optional<QVector<Stroke>> cut(const QVector<Stroke> &strokes, QPointF a, QPointF b, double radius) {
+    const QRectF reach = QRectF(a, b).normalized().adjusted(-radius, -radius, radius, radius);
+    QVector<Stroke> out;
+    bool changed = false;
+    for (const Stroke &s : strokes) {
+        const QRectF b0 = bounds({s}, {0});
+        if (!b0.intersects(reach) || !hits(s, a, radius + QLineF(a, b).length())) { out << s; continue; }
+        // Dense points (≤ 1 pt apart), split into the runs that lie outside the eraser.
+        QVector<QVector<InkPoint>> runs(1);
+        bool cutHere = false;
+        auto visit = [&](const InkPoint &p) {
+            if (distanceToSegment(p.p, a, b) <= radius + p.w / 2) {
+                cutHere = true;
+                if (!runs.last().isEmpty()) runs.append(QVector<InkPoint>());
+            } else {
+                runs.last() << p;
+            }
+        };
+        visit(s.points.first());
+        for (int i = 1; i < s.points.size(); ++i) {
+            const InkPoint &p0 = s.points[i - 1], &p1 = s.points[i];
+            const int steps = std::max(1, int(std::ceil(QLineF(p0.p, p1.p).length())));
+            for (int k = 1; k <= steps; ++k) {
+                const double t = double(k) / steps;
+                visit({p0.p + (p1.p - p0.p) * t, p0.w + (p1.w - p0.w) * t});
+            }
+        }
+        if (!cutHere) { out << s; continue; }
+        changed = true;
+        for (const auto &run : runs)
+            if (run.size() > 1) out << Stroke{s.kind, s.color, run};
+    }
+    if (!changed) return std::nullopt;
+    return out;
+}
+
+QVector<int> inside(const QVector<Stroke> &strokes, const QPolygonF &lasso) {
+    QVector<int> out;
+    if (lasso.size() < 3) return out;
+    for (int i = 0; i < strokes.size(); ++i) {
+        int in = 0;
+        for (const InkPoint &p : strokes[i].points) in += lasso.containsPoint(p.p, Qt::OddEvenFill);
+        if (!strokes[i].points.isEmpty() && in * 2 >= strokes[i].points.size()) out << i;
+    }
+    return out;
+}
+
+QRectF bounds(const QVector<Stroke> &strokes, const QVector<int> &indices) {
+    QRectF r;
+    for (int i : indices) {
+        if (i < 0 || i >= strokes.size()) continue;
+        for (const InkPoint &p : strokes[i].points)
+            r |= QRectF(p.p - QPointF(p.w / 2, p.w / 2), QSizeF(p.w, p.w));
+    }
+    return r;
 }
 
 }

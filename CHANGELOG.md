@@ -2,7 +2,8 @@
 
 ## 0.1.1 (beta 2)
 
-PenCast for Linux, and a reading view for checking a deck while you write it.
+PenCast for Linux, with everything the Mac presenter does, and a reading view for checking a deck while you
+write it.
 
 - Decks open in a scrolling reading view for checking them while writing; **Present** switches to the presenter
   at that page (and opens the projector window on the Mac).
@@ -11,8 +12,22 @@ PenCast for Linux, and a reading view for checking a deck while you write it.
 - **Linux (beta):** packages for Rocky / RHEL / AlmaLinux 9 and 10, Fedora, Ubuntu 24.04 and 26.04 and Debian 13,
   and an AppImage for other distributions. Reading view with reload on recompile, presenter with the projector
   on the second screen, laser, pressure-sensitive pen, highlighter, eraser (a tablet pen's eraser end and barrel
-  button too), palm rejection, undo, talk timer and speaker notes, with the iPad's toolbar. Not yet on Linux:
-  videos and animations, zoom, the lasso, the partial eraser and export.
+  button too), palm rejection, undo, talk timer and speaker notes, with the iPad's toolbar.
+- **Linux:** embedded videos (media9, `\movie`, Screen/Rendition) and `animate` animations play in place on the
+  presenter and the projector, with their autoplay and loop settings, under your ink. Click a video with the
+  pointer for its play/pause button and scrubber; click an animation to pause or resume it. A video that continues
+  across overlay steps keeps playing.
+- **Linux:** zoom: pinch on a touchscreen or trackpad (a two-finger tap zooms out), Ctrl+scroll, or
+  Ctrl+= / Ctrl+− / Ctrl+0; scroll or drag to move around. **Projector Follows Zoom** is in the projector menu.
+  Once a pen is used, one finger taps and moves the zoomed slide instead of writing, as on the iPad.
+- **Linux:** lasso (S): circle ink, drag it, click it for cut, copy, delete and duplicate; Delete and the clipboard
+  keys work too. Partial eraser (tap the eraser again for its mode and size).
+- **Linux:** export with ink (share icon): notes (one page per slide, fully uncovered) or every page, as vector PDF.
+- **Linux:** links in the slide work with the pointer (Beamer's navigation symbols, `\hyperlink` buttons); the
+  slide grid (G) jumps to any slide.
+- **Linux:** tap the selected tool again for its settings, as on the iPad: fountain or ball pen, a size slider,
+  pressure response with a scratch pad, more colours and a custom colour; the laser as a trail or just a dot, with
+  its sizes; the partial eraser's size.
 
 ## 0.1.0 (beta 1)
 

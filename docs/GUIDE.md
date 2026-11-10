@@ -42,7 +42,9 @@ draws at an even width.
 
 Pinch to zoom in where you want to write, and drag with one finger to move around. Two-finger tap, or the
 "whole slide" button, zooms back out. While zoomed, taps never change the slide. On the Mac: ⌘= ⌘− ⌘0, a
-trackpad pinch, or two-finger scrolling.
+trackpad pinch, or two-finger scrolling. On Linux: pinch on a touchscreen (one finger moves
+around once you have used a pen; a two-finger tap zooms out), a trackpad pinch, Ctrl+scroll, or Ctrl+= Ctrl+−
+Ctrl+0; scroll, or drag with the pointer tool, to move around.
 
 The projector either keeps showing the whole slide (the default) or follows your zoom; choose in the
 **Present** menu (share icon).
@@ -52,6 +54,9 @@ The projector either keeps showing the whole slide (the default) or follows your
 Embedded videos and `animate` animations play in place, with their autoplay and loop settings. Tap a video to
 show its play/pause button and scrubber; they fade after a few seconds and appear only on the iPad. Tap an
 animation to pause or resume it. A video that continues across overlay steps keeps playing without a break.
+On Linux, click with the pointer tool; the same click follows links. G opens the slide grid, S picks the lasso,
+and Delete, Ctrl+X/C/V and Ctrl+D act on a lasso selection. Videos need an H.264 codec on Fedora, Rocky and RHEL
+(see the README).
 
 ## Presenting on a projector
 
