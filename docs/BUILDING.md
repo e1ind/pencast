@@ -41,11 +41,43 @@ xcodebuild -project PenCast.xcodeproj -scheme PenCast -configuration Release \
 cp -R build/mac/Build/Products/Release-maccatalyst/PenCast.app /Applications/
 ```
 
+## Linux
+
+The Linux app is a separate Qt 6 program in `linux/` (C++, CMake). It needs Qt 6.4 or later with the Qt PDF
+module. On Rocky Linux 9 (and RHEL / AlmaLinux 9), Qt PDF comes from EPEL:
+
+```sh
+sudo dnf install epel-release
+sudo dnf config-manager --set-enabled crb
+sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtpdf-devel
+```
+
+On Fedora: `sudo dnf install cmake gcc-c++ qt6-qtbase-devel qt6-qtpdf-devel`. On Ubuntu 24.04 / Debian 13:
+`sudo apt install cmake g++ qt6-base-dev qt6-pdf-dev`. Then, from the repository root:
+
+```sh
+cmake -B build/linux -S linux -DCMAKE_BUILD_TYPE=Release
+cmake --build build/linux -j
+ctest --test-dir build/linux          # ink logic, plus simulated pen, eraser and finger input
+sudo cmake --install build/linux      # pencast command, app menu entry and icon (under /usr/local)
+```
+
+`pencast deck.pdf` opens a deck in the reading view; `pencast --present deck.pdf` starts presenting. Point your
+LaTeX editor's PDF viewer at `pencast %f` and the open deck reloads after every compile. The same sources build on
+a Mac for development (`brew install cmake qtbase qtwebengine`, then add `-DCMAKE_PREFIX_PATH=$(brew --prefix)`).
+
+Ink is saved in `~/.local/share/PenCast/Ink/`. Not on Linux yet: embedded videos and `animate`, zoom, the lasso,
+the partial eraser, and export.
+
 ## Making a release
 
 ```sh
 ./scripts/package-mac.sh     # → dist/PenCast-mac.dmg
 ```
+
+The Linux packages are built by GitHub Actions (`.github/workflows/linux.yml`): publishing a release builds
+and tests them on each distribution and attaches the `.rpm`, `.deb` and AppImage files to it. To try a build
+without releasing, run the **Linux packages** workflow by hand from the Actions tab and download its artifacts.
 
 The script builds a universal (Apple silicon + Intel) Release app, signs it ad hoc (no paid Apple Developer
 account needed) and packs it in a disk image. Create a GitHub release for the new version tag, attach
@@ -53,8 +85,8 @@ account needed) and packs it in a disk image. Create a GitHub release for the ne
 points at `releases/latest/download/PenCast-mac.dmg`, which GitHub resolves to the newest release that is not
 marked as a pre-release.
 
-Bump the version in `project.yml` (`CFBundleShortVersionString`, and `CFBundleVersion` for every upload) and run
-`xcodegen` before building.
+Bump the version in `project.yml` (`CFBundleShortVersionString`, and `CFBundleVersion` for every upload) and in
+`linux/CMakeLists.txt` (`project(... VERSION ...)`), and run `xcodegen` before building.
 
 With a paid Apple Developer account, sign with a Developer ID certificate and notarize (`xcrun notarytool`)
 instead, and macOS opens the app without the "unidentified developer" step.

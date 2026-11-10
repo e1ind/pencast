@@ -1,0 +1,104 @@
+# Linux packages: built on each distribution against its own Qt, tested, and attached to the release when
+# one is published. Run it by hand (Actions → Linux packages → Run workflow) to try a build without releasing.
+name: Linux packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Rocky / RHEL / Alma 9, image: 'rockylinux/rockylinux:9', family: el, file: pencast-el9.x86_64.rpm }
+          - { name: Rocky / RHEL / Alma 10, image: 'rockylinux/rockylinux:10', family: el, file: pencast-el10.x86_64.rpm }
+          - { name: Fedora, image: 'fedora:latest', family: fedora, file: pencast-fedora.x86_64.rpm }
+          - { name: Ubuntu 24.04, image: 'ubuntu:24.04', family: debian, file: pencast-ubuntu-24.04_amd64.deb }
+          - { name: Ubuntu 26.04, image: 'ubuntu:26.04', family: debian, file: pencast-ubuntu-26.04_amd64.deb }
+          - { name: Debian 13, image: 'debian:13', family: debian, file: pencast-debian-13_amd64.deb }
+    steps:
+      - name: Install build tools and Qt (EL)
+        if: matrix.family == 'el'
+        run: |
+          dnf install -y dnf-plugins-core epel-release
+          dnf config-manager --set-enabled crb
+          dnf install -y cmake gcc-c++ rpm-build qt6-qtbase-devel qt6-qtpdf-devel
+      - name: Install build tools and Qt (Fedora)
+        if: matrix.family == 'fedora'
+        run: dnf install -y cmake gcc-c++ rpm-build qt6-qtbase-devel qt6-qtpdf-devel
+      - name: Install build tools and Qt (Debian, Ubuntu)
+        if: matrix.family == 'debian'
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake g++ dpkg-dev file qt6-base-dev qt6-pdf-dev
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: |
+          cmake -B build -S linux -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j "$(nproc)"
+          ctest --test-dir build --output-on-failure
+      - name: Package
+        run: |
+          cd build && cpack -G ${{ matrix.family == 'debian' && 'DEB' || 'RPM' }} && cd ..
+          mv build/pencast*.${{ matrix.family == 'debian' && 'deb' || 'rpm' }} ${{ matrix.file }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.file }}
+          path: ${{ matrix.file }}
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ${{ matrix.file }}
+
+  appimage:
+    name: AppImage (any distribution)
+    runs-on: ubuntu-22.04   # the oldest glibc still supported, so the AppImage runs on older systems too
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          modules: 'qtpdf'
+          cache: true
+      - name: Build and test
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-cursor0 libfuse2
+          cmake -B build -S linux -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+          cmake --build build -j "$(nproc)"
+          QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+          DESTDIR="$PWD/AppDir" cmake --install build
+      - name: Bundle
+        env:
+          EXTRA_PLATFORM_PLUGINS: libqwayland-egl.so;libqwayland-generic.so
+          LDAI_OUTPUT: PenCast-x86_64.AppImage
+        run: |
+          base=https://github.com/linuxdeploy
+          wget -q $base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q $base/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy*.AppImage
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage \
+            -d AppDir/usr/share/applications/pencast.desktop -i linux/pencast.png
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PenCast-x86_64.AppImage
+          path: PenCast-x86_64.AppImage
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: PenCast-x86_64.AppImage
