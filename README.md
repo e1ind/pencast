@@ -86,7 +86,8 @@ warnings, requires Apple's Developer Program at **$99 a year**. If PenCast is us
 toward that goal makes the release possible.
 
 <p align="center">
-  <a href="https://ko-fi.com/gregoryjanes"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support PenCast on Ko-fi"></a>
+  <a href="https://ko-fi.com/gregoryjanes/goal?g=0"><img src="docs/media/goal.svg" width="420" alt="App Store goal progress"></a><br><br>
+  <a href="https://ko-fi.com/gregoryjanes/goal?g=0"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support PenCast on Ko-fi"></a>
 </p>
 
 ## Roadmap
