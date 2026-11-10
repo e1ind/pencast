@@ -1,3 +1,9 @@
+# <img align="left" width="40" height="40" src="Demo/icon.png" alt="PenCast icon"> PenCast
+
+<p align="center">
+  <img src="docs/media/banner.png" alt="PenCast: present Beamer PDFs with their videos, animations and your handwriting. For iPad and Mac.">
+</p>
+
 <p align="center">
   <a href="https://github.com/e1ind/pencast/releases/latest/download/PenCast-mac.dmg"><img src="https://img.shields.io/badge/Download_for_Mac-Beta-0A84FF?logo=apple&logoColor=white" alt="Download for Mac"></a>
   <a href="#download"><img src="https://img.shields.io/badge/Download_for_Linux-Beta-0A84FF?logo=linux&logoColor=white" alt="Download for Linux"></a>
