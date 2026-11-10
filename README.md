@@ -1,7 +1,7 @@
-# <img align="left" width="40" height="40" src="Demo/icon.png" alt="PenCast icon"> PenCast
+# <img align="left" width="60" height="60" src="Demo/icon.png" alt="PenCast icon"> PenCast
 
 <p align="center">
-  <img src="docs/media/banner.png" alt="PenCast: present Beamer PDFs with their videos, animations and your handwriting. For iPad and Mac.">
+  <img src="docs/media/banner.png" width="720" alt="PenCast: present Beamer PDFs with their videos, animations and your handwriting. For iPad and Mac.">
 </p>
 
 <p align="center">
