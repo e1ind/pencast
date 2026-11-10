@@ -882,6 +882,78 @@ struct LiveStrokeView: View {
 
 // MARK: - iPad presenter screen
 
+/// What an opened deck shows first: every page in one scrolling column, for checking a deck while writing
+/// it (it reloads on each LaTeX compile). Present switches to the presenter at the page being read.
+struct ReaderView: View {
+    let presenter: Presenter
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Button { presenter.close() } label: { Image(systemName: "xmark.circle").barTarget() }
+                    .buttonStyle(.borderless).font(.title2).accessibilityLabel("Close Presentation")
+                Text(presenter.deckName).font(.headline).lineLimit(1)
+                Text("\(presenter.pageIndex + 1) / \(presenter.pageCount)").monospacedDigit().fixedSize()
+                    .foregroundStyle(.secondary).padding(.horizontal, 8)
+                Spacer()
+                Button {
+                    // Mac: the projector is a window; drag it to the other screen and make it full screen.
+                    if isMac && presenter.projectorsShown == 0 { openWindow(id: "projector") }
+                    presenter.present()
+                } label: { Label("Present", systemImage: "play.rectangle.fill") }
+                    .buttonStyle(.borderedProminent).tint(.accentColor).fixedSize()   // the title shrinks first, never this.keyboardShortcut(.return, modifiers: .command)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(.bar)
+            if let doc = presenter.document {
+                ReaderPDF(document: doc, page: presenter.pageIndex) { presenter.go(to: $0) }
+            }
+        }
+    }
+}
+
+/// PDFKit's continuous scroller, kept in step with `Presenter.pageIndex` both ways
+/// (scrolling sets the page; arrow keys and reloads move the scroller).
+struct ReaderPDF: UIViewRepresentable {
+    let document: PDFDocument
+    let page: Int
+    let onPage: (Int) -> Void
+
+    func makeUIView(context: Context) -> PDFView {
+        let v = PDFView()
+        v.displayMode = .singlePageContinuous
+        v.displayDirection = .vertical
+        v.autoScales = true
+        v.backgroundColor = .systemGray5
+        context.coordinator.observer = NotificationCenter.default.addObserver(
+            forName: .PDFViewPageChanged, object: v, queue: nil) { [coordinator = context.coordinator] _ in
+            // Later, not during the view update; and read the page then: a reloaded document posts page 1 first.
+            DispatchQueue.main.async { [weak v] in
+                guard let v, let doc = v.document, let p = v.currentPage else { return }
+                coordinator.onPage(doc.index(for: p))
+            }
+        }
+        return v
+    }
+
+    func updateUIView(_ v: PDFView, context: Context) {
+        context.coordinator.onPage = onPage
+        // ponytail: a reload keeps the page, not the exact scroll offset within it.
+        if v.document !== document { v.document = document }
+        if let target = document.page(at: page), v.currentPage !== target { v.go(to: target) }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(onPage: onPage) }
+
+    final class Coordinator {
+        var onPage: (Int) -> Void
+        var observer: NSObjectProtocol?
+        init(onPage: @escaping (Int) -> Void) { self.onPage = onPage }
+        deinit { observer.map(NotificationCenter.default.removeObserver) }
+    }
+}
+
 struct PresenterView: View {
     @Bindable var presenter: Presenter
     @State private var showThumbnails = false
@@ -894,7 +966,12 @@ struct PresenterView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            toolbar
+            // A window too narrow for the bar (tiled half screen, iPad split view) scrolls it instead of
+            // squeezing the icons.
+            ViewThatFits(in: .horizontal) {
+                toolbar
+                ScrollView(.horizontal, showsIndicators: false) { toolbar }.background(.bar)
+            }
             GeometryReader { geo in
                 HStack(spacing: 0) {
                     SlideView(presenter: presenter, interactive: true)
@@ -1007,6 +1084,7 @@ struct PresenterView: View {
         } label: {
             Group { if exporting { ProgressView() } else { Image(systemName: "square.and.arrow.up") } }.barTarget()
         }
+        .menuIndicator(.hidden)   // Mac squeezed a dropdown arrow into the icon's 44 pt slot
         .help("Present and export")
         .accessibilityLabel("Export")
         .disabled(exporting)
@@ -1059,8 +1137,8 @@ struct PresenterView: View {
 
     private var toolbar: some View {
         HStack(spacing: 4) {
-            Button { presenter.close() } label: { Image(systemName: "xmark.circle").barTarget() }
-                .accessibilityLabel("Close Presentation")
+            Button { presenter.stopPresenting() } label: { Image(systemName: "xmark.circle").barTarget() }
+                .accessibilityLabel("Stop Presenting")
             Button { showThumbnails = true } label: { Image(systemName: "square.grid.3x2").barTarget() }
                 .accessibilityLabel("Slides")
             Text("\(presenter.pageIndex + 1) / \(presenter.pageCount)").monospacedDigit().fixedSize()

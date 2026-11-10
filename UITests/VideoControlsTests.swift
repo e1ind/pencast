@@ -8,6 +8,7 @@ final class VideoControlsTests: XCTestCase {
         // Open the bundled demo deck the way a user would, then go to the vortex slide (page 5).
         app.buttons["Test decks"].tap()
         app.buttons["PenCast_Demo"].tap()
+        app.buttons["Present"].tap()
         for _ in 0..<4 { app.buttons["Forward"].tap() }
 
         let slide = app.descendants(matching: .any)["slide"].firstMatch
@@ -31,6 +32,7 @@ final class VideoControlsTests: XCTestCase {
         app.launch()
         app.buttons["Test decks"].tap()
         app.buttons["PenCast_Demo"].tap()
+        app.buttons["Present"].tap()
         app.buttons["Forward"].tap()                                  // page 2: no media
         let slide = app.descendants(matching: .any)["slide"].firstMatch
         XCTAssertTrue(slide.waitForExistence(timeout: 10))
@@ -49,6 +51,7 @@ final class VideoControlsTests: XCTestCase {
         app.launch()
         app.buttons["Test decks"].tap()
         app.buttons["PenCast_Demo"].tap()
+        app.buttons["Present"].tap()
         app.buttons["Forward"].tap()                                  // page 2: no media
         let slide = app.descendants(matching: .any)["slide"].firstMatch
         XCTAssertTrue(slide.waitForExistence(timeout: 10))
@@ -80,6 +83,7 @@ final class VideoControlsTests: XCTestCase {
             app.launch()
             app.buttons["Test decks"].tap()
             app.buttons["PenCast_Demo"].tap()
+            app.buttons["Present"].tap()
             app.buttons["Forward"].tap()                              // page 2: no media
             let slide = app.descendants(matching: .any)["slide"].firstMatch
             XCTAssertTrue(slide.waitForExistence(timeout: 10))
@@ -112,6 +116,7 @@ final class VideoControlsTests: XCTestCase {
             app.launch()
             app.buttons["Test decks"].tap()
             app.buttons["PenCast_Demo"].tap()
+            app.buttons["Present"].tap()
             app.buttons["Forward"].tap()
             let slide = app.descendants(matching: .any)["slide"].firstMatch
             XCTAssertTrue(slide.waitForExistence(timeout: 10))
@@ -138,6 +143,7 @@ final class VideoControlsTests: XCTestCase {
         app.launch()
         app.buttons["Test decks"].tap()
         app.buttons["PenCast_Demo"].tap()
+        app.buttons["Present"].tap()
         for tool in ["laser", "pen", "highlighter", "eraser", "lasso", "pointer"] {
             let b = app.buttons[tool]
             b.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.15)).tap()   // near a corner
@@ -227,6 +233,7 @@ final class VideoControlsTests: XCTestCase {
         app.launch()
         app.buttons["Test decks"].tap()
         app.buttons["PenCast_Demo"].tap()
+        app.buttons["Present"].tap()
         app.buttons["Forward"].tap()
         let slide = app.descendants(matching: .any)["slide"].firstMatch
         slide.pinch(withScale: 2.5, velocity: 1.5)
@@ -253,6 +260,7 @@ final class VideoControlsTests: XCTestCase {
         app.launch()
         app.buttons["Test decks"].tap()
         app.buttons["PenCast_Demo"].tap()
+        app.buttons["Present"].tap()
         sleep(2)
         for (index, item) in ["Save As…", "Share…", "Print…"].enumerated() {
             app.buttons["Export"].tap()

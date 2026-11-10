@@ -41,6 +41,8 @@ enum ProjectorOverride: Equatable { case none, black, white, frozen(UIImage) }
     private(set) var deckURL: URL?
     private var watchTask: Task<Void, Never>?
     private(set) var pageIndex = 0
+    /// false = the scrollable reading view; true = the slide presenter with ink, media and projector.
+    private(set) var presenting = false
     private(set) var media: [MediaItem] = []
     private(set) var videos: [String: VideoController] = [:]          // current page only
     private(set) var animations: [String: AnimationController] = [:]  // current page only
@@ -209,7 +211,7 @@ enum ProjectorOverride: Equatable { case none, black, white, frozen(UIImage) }
         (drawings, orphanInk) = InkStore.load(deck: deckName, keys: inkKeys, legacyID: deckID)
         if UserDefaults.standard.bool(forKey: "freshInk") { drawings = [:] }   // test hook: start with no ink
         inkRevision += 1
-        timerBanked = 0; timerStart = Date()
+        timerBanked = 0; timerStart = nil   // starts with `present()`
         // Drop videos cached from older compiles of this deck.
         let current = videoCacheDir.lastPathComponent
         for old in (try? FileManager.default.contentsOfDirectory(atPath: Self.cacheDir.path)) ?? []
@@ -237,9 +239,10 @@ enum ProjectorOverride: Equatable { case none, black, white, frozen(UIImage) }
     }
 
     private func reload(_ url: URL) {
-        let page = pageIndex, banked = timerElapsed(at: Date()), running = timerStart != nil
+        let page = pageIndex, banked = timerElapsed(at: Date()), running = timerStart != nil, wasPresenting = presenting
         open(url)
         timerBanked = banked; timerStart = running ? Date() : nil
+        presenting = wasPresenting
         go(to: min(page, (document?.pageCount ?? 1) - 1))
     }
 
@@ -256,7 +259,7 @@ enum ProjectorOverride: Equatable { case none, black, white, frozen(UIImage) }
         accessed = []
         document = nil; deckURL = nil; scanner = nil
         media = []; drawings = [:]; undoStack = [:]; redoStack = [:]; pageIndex = 0; frameStart = []
-        cancelZoom(); projector = .none; controlsFor = nil; hasNotes = false
+        cancelZoom(); projector = .none; controlsFor = nil; hasNotes = false; presenting = false
         renderer.clear()
         UIApplication.shared.isIdleTimerDisabled = false
     }
@@ -281,10 +284,26 @@ enum ProjectorOverride: Equatable { case none, black, white, frozen(UIImage) }
         laserPressing = false
         cancelZoom()
         controlsFor = nil
+        guard presenting else { return }   // reading view: no videos playing while scrolling
         startMedia(reusing: kept)
         prepareVideos(onPage: i + 1)
     }
     func next() { go(to: pageIndex + 1) }
+
+    /// Reading view → presenter, at the page being read. The talk timer starts here.
+    func present() {
+        presenting = true
+        timerBanked = 0; timerStart = Date()
+        go(to: pageIndex)
+    }
+
+    /// Presenter → reading view, at the current slide. Ink is kept.
+    func stopPresenting() {
+        stopMedia()
+        presenting = false
+        projector = .none
+        go(to: pageIndex)
+    }
     func previous() { go(to: pageIndex - 1) }
 
     /// Finger tap at a point in PDF page space: media toggles, links jump, edges navigate.

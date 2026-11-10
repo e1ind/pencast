@@ -11,13 +11,7 @@ struct PenCastApp: App {
             RootView(presenter: .shared)
                 .onOpenURL { Presenter.shared.open($0) }   // Files "Open in", AirDrop, share sheet
                 .onAppear {
-                    #if targetEnvironment(macCatalyst)
-                    // The presenter toolbar needs about 1100 points; Catalyst's default window is 1024.
-                    for case let s as UIWindowScene in UIApplication.shared.connectedScenes
-                    where s.session.role == .windowApplication {
-                        s.sizeRestrictions?.minimumSize = CGSize(width: 1180, height: 760)
-                    }
-                    #endif
+                    setMinimumWindowSize(presenting: Presenter.shared.presenting)
                     // Test hook: `-openDeck media_test [-openPage 5]` opens a bundled deck (or an absolute path).
                     let d = UserDefaults.standard
                     if let name = d.string(forKey: "openDeck"), Presenter.shared.document == nil,
@@ -25,6 +19,7 @@ struct PenCastApp: App {
                                                      : Bundle.main.url(forResource: name, withExtension: "pdf") {
                         Presenter.shared.open(url)
                         Presenter.shared.go(to: d.integer(forKey: "openPage"))
+                        Presenter.shared.present()
                         let z = d.double(forKey: "selfTestZoom")   // test hook: `-selfTestZoom 3` zooms in
                         if z > 1 { Presenter.shared.zoomStep(z) }
                         // Test hook: `-selfTestExport notes|all` writes the export and prints where.
@@ -74,10 +69,25 @@ struct SlideCommands: Commands {
     }
 }
 
+/// Mac: the presenter toolbar needs about 1100 points, so the window can't be narrower while presenting.
+/// The library and reading view can shrink to share the screen with a LaTeX editor.
+@MainActor func setMinimumWindowSize(presenting: Bool) {
+    #if targetEnvironment(macCatalyst)
+    for case let s as UIWindowScene in UIApplication.shared.connectedScenes where s.session.role == .windowApplication {
+        s.sizeRestrictions?.minimumSize = presenting ? CGSize(width: 1180, height: 760) : CGSize(width: 420, height: 320)
+    }
+    #endif
+}
+
 struct RootView: View {
     let presenter: Presenter
     var body: some View {
-        if presenter.document == nil { HomeView(presenter: presenter) } else { PresenterView(presenter: presenter) }
+        Group {
+            if presenter.document == nil { HomeView(presenter: presenter) }
+            else if presenter.presenting { PresenterView(presenter: presenter) }
+            else { ReaderView(presenter: presenter) }
+        }
+        .onChange(of: presenter.presenting) { _, presenting in setMinimumWindowSize(presenting: presenting) }
     }
 }
 
@@ -134,7 +144,7 @@ struct ProjectorView: View {
 
     var body: some View {
         ZStack {
-            if presenter.document != nil { SlideView(presenter: presenter, interactive: false) } else { Color.black }
+            if presenter.document != nil && presenter.presenting { SlideView(presenter: presenter, interactive: false) } else { Color.black }
             switch presenter.projector {
             case .none: EmptyView()
             case .black: Color.black
